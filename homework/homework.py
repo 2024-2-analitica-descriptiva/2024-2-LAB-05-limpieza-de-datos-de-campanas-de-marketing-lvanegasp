@@ -49,8 +49,116 @@ def clean_campaign_data():
 
 
     """
+    import pandas as pd
+    import zipfile
+    import os
 
-    return
+    input_folder = "files/input/"
+    output_folder = "files/output/"
+
+    os.makedirs(output_folder, exist_ok=True)
+    client_df = pd.DataFrame(
+        columns=[
+            "client_id",
+            "age",
+            "job",
+            "marital",
+            "education",
+            "credit_default",
+            "mortgage",
+        ]
+    )
+    campaign_df = pd.DataFrame(
+        columns=[
+            "client_id",
+            "number_contacts",
+            "contact_duration",
+            "previous_campaign_contacts",
+            "previous_outcome",
+            "campaign_outcome",
+            "last_contact_day",
+        ]
+    )
+    economics_df = pd.DataFrame(
+        columns=["client_id", "cons_price_idx", "euribor_three_months"]
+    )
+
+    def process_client_data(df):
+        df["job"] = df["job"].str.replace(".", "").str.replace("-", "_")
+        df["education"] = (
+            df["education"].str.replace(".", "_").replace("unknown", pd.NA)
+        )
+        df["credit_default"] = df["credit_default"].apply(
+            lambda x: 1 if x == "yes" else 0
+        )
+        df["mortgage"] = df["mortgage"].apply(lambda x: 1 if x == "yes" else 0)
+        return df[
+            [
+                "client_id",
+                "age",
+                "job",
+                "marital",
+                "education",
+                "credit_default",
+                "mortgage",
+            ]
+        ]
+
+    def process_campaign_data(df):
+        df["previous_outcome"] = df["previous_outcome"].apply(
+            lambda x: 1 if x == "success" else 0
+        )
+        df["campaign_outcome"] = df["campaign_outcome"].apply(
+            lambda x: 1 if x == "yes" else 0
+        )
+        df["last_contact_day"] = pd.to_datetime(
+            df["day"].astype(str) + "-" + df["month"] + "-2022", format="%d-%b-%Y"
+        )
+        return df[
+            [
+                "client_id",
+                "number_contacts",
+                "contact_duration",
+                "previous_campaign_contacts",
+                "previous_outcome",
+                "campaign_outcome",
+                "last_contact_day",
+            ]
+        ]
+
+    for file_name in os.listdir(input_folder):
+        if file_name.endswith(".zip"):
+            with zipfile.ZipFile(os.path.join(input_folder, file_name), "r") as zip_ref:
+                for file in zip_ref.namelist():
+                    if file.endswith(".csv"):
+                        with zip_ref.open(file) as f:
+                            df = pd.read_csv(f)
+                            client_df = pd.concat(
+                                [client_df, process_client_data(df)], ignore_index=True
+                            )
+                            campaign_df = pd.concat(
+                                [campaign_df, process_campaign_data(df)],
+                                ignore_index=True,
+                            )
+                            economics_df = pd.concat(
+                                [
+                                    economics_df,
+                                    df[
+                                        [
+                                            "client_id",
+                                            "cons_price_idx",
+                                            "euribor_three_months",
+                                        ]
+                                    ],
+                                ],
+                                ignore_index=True,
+                            )
+
+    campaign_df.rename(columns={"last_contact_day": "last_contact_date"}, inplace=True)
+
+    client_df.to_csv(os.path.join(output_folder, "client.csv"), index=False)
+    campaign_df.to_csv(os.path.join(output_folder, "campaign.csv"), index=False)
+    economics_df.to_csv(os.path.join(output_folder, "economics.csv"), index=False)
 
 
 if __name__ == "__main__":
